@@ -18,10 +18,15 @@ package controller
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/rds"
+	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsCfg "github.com/aws/aws-sdk-go-v2/config"
+	awsRds "github.com/aws/aws-sdk-go-v2/service/rds"
+	//	awsRdsTypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
+	//	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	//	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -51,30 +56,69 @@ type AwsRDSDemoInstanceReconciler struct {
 func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	logger.Info("reconcile triggered")
+	logger.Info("reconcile triggered...")
 
 	instance := &awsv1alpha1.AwsRDSDemoInstance{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if errors.IsNotFound(err) {
+			logger.Error(err, "not found")
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
+	logger.Info("found: " + instance.Name)
 
-	// Create AWS session and RDS client
-	sess := session.Must(session.NewSession())
-	svc := rds.New(sess)
+	// Create RDS client
+	cfg, err := awsCfg.LoadDefaultConfig(ctx)
+	if err != nil {
+		logger.Error(err, "failed to load AWS config")
+		return ctrl.Result{}, err
+	}
+	rdsClient := awsRds.NewFromConfig(cfg)
+
+	dbIdentifier := fmt.Sprintf("%s-%s", instance.Spec.DBName, instance.Spec.Stage)
+
+	// Fetch credentials from existing secret
+	/*
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.CredentialSecretName, Namespace: req.Namespace}, secret); err != nil {
+			logger.Error(err, "unable to fetch credentials secret"+err.Error())
+			return ctrl.Result{}, err
+		}
+		unb, uexists := secret.Data["username"]
+		psb, pexists := secret.Data["password"]
+		if !uexists || !pexists {
+			err := fmt.Errorf("secret must contain 'username' and 'password'")
+			logger.Error(err, "invalid secret")
+			return ctrl.Result{}, err
+		}
+		un := string(unb)
+		ps := string(psb)
+	*/
+	un, ps := "postgres", "postgres"
 
 	// Check if RDS already exists
-	di := &rds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: aws.String(instance.Spec.InstanceID),
-	}
-	if _, err := svc.DescribeDBInstances(di); err == nil {
-		logger.Info("db already exists")
-		instance.Status.Status = "AlreadyExists"
-		r.Status().Update(ctx, instance)
-		return ctrl.Result{}, nil
+	_, err = rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &dbIdentifier,
+	})
+	if err != nil {
+		_, err = rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
+			DBInstanceIdentifier: aws.String(dbIdentifier),
+			DBInstanceClass:      aws.String(instance.Spec.DBInstanceClass),
+			Engine:               aws.String(instance.Spec.Engine),
+			EngineVersion:        aws.String(instance.Spec.EngineVersion),
+			AllocatedStorage:     aws.Int32(20),
+			DBName:               aws.String(instance.Spec.DBName),
+			MasterUsername:       aws.String(un),
+			MasterUserPassword:   aws.String(ps),
+		})
+		if err != nil {
+			logger.Error(err, "failed to create db: "+err.Error())
+			return ctrl.Result{}, err
+		}
 	}
 
-	// RDS does not exist, try to create one
-	logger.Info("db does not exits, try to create one")
+	logger.Info("db created successfully")
 
 	return ctrl.Result{}, nil
 }

@@ -50,8 +50,6 @@ spec:
                 type: string
               engineVersion:
                 type: string
-              instanceId:
-                type: string
               stage:
                 type: string
             required:
@@ -60,7 +58,6 @@ spec:
             - dbName
             - engine
             - engineVersion
-            - instanceId
             - stage
             type: object
           status:

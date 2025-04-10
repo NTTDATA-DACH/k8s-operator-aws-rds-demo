@@ -11,5 +11,4 @@ spec:
   engineVersion: "12.4"
   dbName: "exampledb"
   stage: "development"
-  instanceId: "exampledb-development"
   credentialSecretName: "postgres-secret"

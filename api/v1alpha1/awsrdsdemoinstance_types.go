@@ -27,7 +27,6 @@ type AwsRDSDemoInstanceSpec struct {
 	EngineVersion        string `json:"engineVersion"`
 	DBName               string `json:"dbName"`
 	Stage                string `json:"stage"`
-	InstanceID           string `json:"instanceId"`
 	CredentialSecretName string `json:"credentialSecretName"`
 }
 
