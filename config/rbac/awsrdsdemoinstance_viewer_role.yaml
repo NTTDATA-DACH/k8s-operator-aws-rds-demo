@@ -1,0 +1,23 @@
+# permissions for end users to view awsrdsdemoinstances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: k8s-operator-aws-rds-demo
+    app.kubernetes.io/managed-by: kustomize
+  name: awsrdsdemoinstance-viewer-role
+rules:
+- apiGroups:
+  - aws.nttdata.com
+  resources:
+  - awsrdsdemoinstances
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - aws.nttdata.com
+  resources:
+  - awsrdsdemoinstances/status
+  verbs:
+  - get
