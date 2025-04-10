@@ -1,5 +1,5 @@
 /*
-Copyright 2025 Adam Boczek.
+Copyright 2025 NTT DATA.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,22 +20,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // AwsRDSDemoInstanceSpec defines the desired state of AwsRDSDemoInstance
 type AwsRDSDemoInstanceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of AwsRDSDemoInstance. Edit awsrdsdemoinstance_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	DBInstanceClass      string `json:"dbInstanceClass"`
+	Engine               string `json:"engine"`
+	EngineVersion        string `json:"engineVersion"`
+	DBName               string `json:"dbName"`
+	Stage                string `json:"stage"`
+	InstanceID           string `json:"instanceId"`
+	CredentialSecretName string `json:"credentialSecretName"`
 }
 
 // AwsRDSDemoInstanceStatus defines the observed state of AwsRDSDemoInstance
 type AwsRDSDemoInstanceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Status string `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

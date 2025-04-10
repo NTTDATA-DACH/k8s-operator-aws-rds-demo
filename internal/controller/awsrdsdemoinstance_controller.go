@@ -1,5 +1,5 @@
 /*
-Copyright 2025 Adam Boczek.
+Copyright 2025 NTT DATA.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
-
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/rds"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,9 +49,32 @@ type AwsRDSDemoInstanceReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
 func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	logger.Info("reconcile triggered")
+
+	instance := &awsv1alpha1.AwsRDSDemoInstance{}
+	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Create AWS session and RDS client
+	sess := session.Must(session.NewSession())
+	svc := rds.New(sess)
+
+	// Check if RDS already exists
+	di := &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: aws.String(instance.Spec.InstanceID),
+	}
+	if _, err := svc.DescribeDBInstances(di); err == nil {
+		logger.Info("db already exists")
+		instance.Status.Status = "AlreadyExists"
+		r.Status().Update(ctx, instance)
+		return ctrl.Result{}, nil
+	}
+
+	// RDS does not exist, try to create one
+	logger.Info("db does not exits, try to create one")
 
 	return ctrl.Result{}, nil
 }
