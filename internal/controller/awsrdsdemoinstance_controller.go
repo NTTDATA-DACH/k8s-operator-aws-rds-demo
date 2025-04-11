@@ -62,7 +62,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	instance := &awsv1alpha1.AwsRDSDemoInstance{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Error(err, "not found: "+err.Error())
+			log.Info("not found AwsRDSDemoInstance, exiting reconciliation loop...")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -87,11 +87,30 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 			log.Error(err, "failed to add finalizer into AwsRDSDemoInstance")
 			return ctrl.Result{}, err
 		}
-		if err = r.Update(ctx, instance); err != nil {
+		if err := r.Update(ctx, instance); err != nil {
 			log.Error(err, "failed to update AwsRDSDemoInstance to add finalizer: "+err.Error())
 			return ctrl.Result{}, err
 		}
 		log.Info("added finalizer for AwsRDSDemoInstance")
+	}
+
+	// Remove instance with finalizer
+	isInstanceToBeDeleted := instance.GetDeletionTimestamp() != nil
+	if isInstanceToBeDeleted {
+		if controllerutil.ContainsFinalizer(instance, awsrdsdemoinstanceFinalizer) {
+			log.Info("starting to delete database")
+
+			log.Info("removing finalizer")
+			if ok := controllerutil.RemoveFinalizer(instance, awsrdsdemoinstanceFinalizer); !ok {
+				err = fmt.Errorf("failed to remove finalizer from AwsRDSDemoInstance")
+				log.Error(err, "failed to remove finalizer from AwsRDSDemoInstance")
+				return ctrl.Result{}, err
+			}
+			if err := r.Update(ctx, instance); err != nil {
+				log.Error(err, "failed to update AwsRDSDemoInstance to remove finalizer: "+err.Error())
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	// Fetch credentials from existing secret
