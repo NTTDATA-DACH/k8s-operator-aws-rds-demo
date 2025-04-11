@@ -4,11 +4,11 @@ metadata:
   labels:
     app.kubernetes.io/name: k8s-operator-aws-rds-demo
     app.kubernetes.io/managed-by: kustomize
-  name: awsrdsdemoinstance-sample
+  name: awsrdsdemoinstance-dev
 spec:
-  dbInstanceClass: "db.t2.micro"
+  dbInstanceClass: "db.t3.micro"
   engine: "postgres"
-  engineVersion: "12.4"
-  dbName: "exampledb"
-  stage: "development"
+  engineVersion: "17.2"
+  dbName: "k8soperatorawsrdsdemo2"
+  stage: "dev"
   credentialSecretName: "postgres-secret"

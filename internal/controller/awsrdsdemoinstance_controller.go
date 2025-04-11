@@ -61,7 +61,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	instance := &awsv1alpha1.AwsRDSDemoInstance{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Error(err, "not found")
+			logger.Error(err, "not found: "+err.Error())
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -71,7 +71,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Create RDS client
 	cfg, err := awsCfg.LoadDefaultConfig(ctx)
 	if err != nil {
-		logger.Error(err, "failed to load AWS config")
+		logger.Error(err, "failed to load AWS config: "+err.Error())
 		return ctrl.Result{}, err
 	}
 	rdsClient := awsRds.NewFromConfig(cfg)
@@ -97,7 +97,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	*/
 	un, ps := "postgres", "postgres"
 
-	// Check if RDS already exists
+	// Create db according to the specification
 	_, err = rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
 		DBInstanceIdentifier: &dbIdentifier,
 	})
@@ -117,8 +117,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 			return ctrl.Result{}, err
 		}
 	}
-
-	logger.Info("db created successfully")
+	logger.Info(fmt.Sprintf("db '%s' with identifier '%s' created successfully", instance.Spec.DBName, dbIdentifier))
 
 	return ctrl.Result{}, nil
 }
