@@ -22,9 +22,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsCfg "github.com/aws/aws-sdk-go-v2/config"
 	awsRds "github.com/aws/aws-sdk-go-v2/service/rds"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	//	awsRdsTypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	//	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	//	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,6 +35,8 @@ import (
 
 	awsv1alpha1 "github.com/NTTDATA-DACH/k8s-operator-aws-rds-demo/api/v1alpha1"
 )
+
+const awsrdsdemoinstanceFinalizer = "aws.nttdata.com/finalizer"
 
 // AwsRDSDemoInstanceReconciler reconciles a AwsRDSDemoInstance object
 type AwsRDSDemoInstanceReconciler struct {
@@ -46,50 +50,62 @@ type AwsRDSDemoInstanceReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
 // the AwsRDSDemoInstance object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
 func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	log := log.FromContext(ctx)
 
-	logger.Info("reconcile triggered...")
+	log.Info("reconcile triggered...")
 
+	// Fetch the AwsRDSDemoInstance instance
 	instance := &awsv1alpha1.AwsRDSDemoInstance{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Error(err, "not found: "+err.Error())
+		if apierrors.IsNotFound(err) {
+			log.Error(err, "not found: "+err.Error())
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
-	logger.Info("found: " + instance.Name)
+	log.Info("found: " + instance.Name)
 
 	// Create RDS client
 	cfg, err := awsCfg.LoadDefaultConfig(ctx)
 	if err != nil {
-		logger.Error(err, "failed to load AWS config: "+err.Error())
+		log.Error(err, "failed to load AWS config: "+err.Error())
 		return ctrl.Result{}, err
 	}
 	rdsClient := awsRds.NewFromConfig(cfg)
 
 	dbIdentifier := fmt.Sprintf("%s-%s", instance.Spec.DBName, instance.Spec.Stage)
 
+	// Add finalizer
+	if !controllerutil.ContainsFinalizer(instance, awsrdsdemoinstanceFinalizer) {
+		log.Info("adding finalizer for AwsRDSDemoInstance")
+		if ok := controllerutil.AddFinalizer(instance, awsrdsdemoinstanceFinalizer); !ok {
+			err = fmt.Errorf("failed to add finalizer into AwsRDSDemoInstance")
+			log.Error(err, "failed to add finalizer into AwsRDSDemoInstance")
+			return ctrl.Result{}, err
+		}
+		if err = r.Update(ctx, instance); err != nil {
+			log.Error(err, "failed to update AwsRDSDemoInstance to add finalizer: "+err.Error())
+			return ctrl.Result{}, err
+		}
+		log.Info("added finalizer for AwsRDSDemoInstance")
+	}
+
 	// Fetch credentials from existing secret
 	/*
 		secret := &corev1.Secret{}
 		if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.CredentialSecretName, Namespace: req.Namespace}, secret); err != nil {
-			logger.Error(err, "unable to fetch credentials secret"+err.Error())
+			log.Error(err, "unable to fetch credentials secret"+err.Error())
 			return ctrl.Result{}, err
 		}
 		unb, uexists := secret.Data["username"]
 		psb, pexists := secret.Data["password"]
 		if !uexists || !pexists {
 			err := fmt.Errorf("secret must contain 'username' and 'password'")
-			logger.Error(err, "invalid secret")
+			log.Error(err, "invalid secret")
 			return ctrl.Result{}, err
 		}
 		un := string(unb)
@@ -113,12 +129,13 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 			MasterUserPassword:   aws.String(ps),
 		})
 		if err != nil {
-			logger.Error(err, "failed to create db: "+err.Error())
+			log.Error(err, "failed to create db: "+err.Error())
 			return ctrl.Result{}, err
 		}
+		log.Info(fmt.Sprintf("database engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
 	}
-	logger.Info(fmt.Sprintf("db '%s' with identifier '%s' created successfully", instance.Spec.DBName, dbIdentifier))
 
+	log.Info("reconcile finished...")
 	return ctrl.Result{}, nil
 }
 
