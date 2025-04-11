@@ -9,6 +9,6 @@ spec:
   dbInstanceClass: "db.t3.micro"
   engine: "postgres"
   engineVersion: "17.2"
-  dbName: "k8soperatorawsrdsdemo2"
+  dbName: "k8soperatorawsrdsdemo"
   stage: "dev"
   credentialSecretName: "postgres-secret"
