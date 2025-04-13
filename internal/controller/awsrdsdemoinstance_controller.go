@@ -18,10 +18,12 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsCfg "github.com/aws/aws-sdk-go-v2/config"
 	awsRds "github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	//	awsRdsTypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
@@ -41,7 +43,8 @@ const awsrdsdemoinstanceFinalizer = "aws.nttdata.com/finalizer"
 // AwsRDSDemoInstanceReconciler reconciles a AwsRDSDemoInstance object
 type AwsRDSDemoInstanceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	rdsClient *awsRds.Client
 }
 
 // +kubebuilder:rbac:groups=aws.nttdata.com,resources=awsrdsdemoinstances,verbs=get;list;watch;create;update;patch;delete
@@ -75,7 +78,7 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 		log.Error(err, "failed to load AWS config: "+err.Error())
 		return ctrl.Result{}, err
 	}
-	rdsClient := awsRds.NewFromConfig(cfg)
+	r.rdsClient = awsRds.NewFromConfig(cfg)
 
 	dbIdentifier := fmt.Sprintf("%s-%s", instance.Spec.DBName, instance.Spec.Stage)
 
@@ -98,9 +101,12 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	isInstanceToBeDeleted := instance.GetDeletionTimestamp() != nil
 	if isInstanceToBeDeleted {
 		if controllerutil.ContainsFinalizer(instance, awsrdsdemoinstanceFinalizer) {
-			log.Info("starting to delete database")
-
-			log.Info("removing finalizer")
+			log.Info("starting to delete database: " + dbIdentifier)
+			if err := r.deleteRDSInstance(ctx, dbIdentifier); err != nil {
+				log.Error(err, "failed to remove database: "+err.Error())
+				return ctrl.Result{}, err
+			}
+			log.Info("database deleted, removing finalizer")
 			if ok := controllerutil.RemoveFinalizer(instance, awsrdsdemoinstanceFinalizer); !ok {
 				err = fmt.Errorf("failed to remove finalizer from AwsRDSDemoInstance")
 				log.Error(err, "failed to remove finalizer from AwsRDSDemoInstance")
@@ -133,11 +139,11 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	un, ps := "postgres", "postgres"
 
 	// Create db according to the specification
-	_, err = rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
+	_, err = r.rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
 		DBInstanceIdentifier: &dbIdentifier,
 	})
 	if err != nil {
-		_, err = rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
+		_, err = r.rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
 			DBInstanceIdentifier: aws.String(dbIdentifier),
 			DBInstanceClass:      aws.String(instance.Spec.DBInstanceClass),
 			Engine:               aws.String(instance.Spec.Engine),
@@ -156,6 +162,21 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	log.Info("reconcile finished...")
 	return ctrl.Result{}, nil
+}
+
+func (r *AwsRDSDemoInstanceReconciler) deleteRDSInstance(ctx context.Context, dbIdentifier string) error {
+	_, err := r.rdsClient.DeleteDBInstance(ctx, &awsRds.DeleteDBInstanceInput{
+		DBInstanceIdentifier: aws.String(dbIdentifier),
+		SkipFinalSnapshot:    aws.Bool(true),
+	})
+	if err != nil {
+		var alreadyDeleted *types.DBInstanceNotFoundFault
+		if errors.As(err, &alreadyDeleted) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
