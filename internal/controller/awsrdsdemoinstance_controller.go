@@ -177,6 +177,8 @@ func (r *AwsRDSDemoInstanceReconciler) createRDSInstance(ctx context.Context, db
 		}
 		log.Info(fmt.Sprintf("db instance for engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
 	}
+
+	return nil
 }
 
 func (r *AwsRDSDemoInstanceReconciler) updateRDSInstance(ctx context.Context, dbIdentifier string, instance *awsv1alpha1.AwsRDSDemoInstance) error {
