@@ -160,11 +160,54 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 		log.Info(fmt.Sprintf("database engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
 	}
 
+	// Update db instance if spec changed
+	if err = r.updateRDSInstance(ctx, dbIdentifier, instance); err != nil {
+		log.Error(err, "failed to update db instance: "+err.Error())
+		return ctrl.Result{}, err
+	}
+
 	log.Info("reconcile finished...")
 	return ctrl.Result{}, nil
 }
 
+func (r *AwsRDSDemoInstanceReconciler) updateRDSInstance(ctx context.Context, dbIdentifier string, instance *awsv1alpha1.AwsRDSDemoInstance) error {
+	log := log.FromContext(ctx)
+
+	modifyInput := &awsRds.ModifyDBInstanceInput{
+		DBInstanceIdentifier: aws.String(dbIdentifier),
+		ApplyImmediately:     aws.Bool(true),
+	}
+
+	currentDb, err := r.getRDSInstance(ctx, dbIdentifier)
+	if err != nil {
+		return err
+	}
+
+	isInstanceToBeUpdate := false
+	if aws.ToString(currentDb.DBInstanceClass) != instance.Spec.DBInstanceClass {
+		modifyInput.DBInstanceClass = aws.String(instance.Spec.DBInstanceClass)
+		isInstanceToBeUpdate = true
+	}
+	if aws.ToString(currentDb.EngineVersion) != instance.Spec.EngineVersion {
+		modifyInput.EngineVersion = aws.String(instance.Spec.EngineVersion)
+		isInstanceToBeUpdate = true
+	}
+
+	if isInstanceToBeUpdate {
+		log.Info("starting to update db instance: " + dbIdentifier)
+		if _, err = r.rdsClient.ModifyDBInstance(ctx, modifyInput); err != nil {
+			return err
+		}
+		log.Info("db instance updated successfully")
+	}
+
+	return nil
+}
+
 func (r *AwsRDSDemoInstanceReconciler) deleteRDSInstance(ctx context.Context, dbIdentifier string) error {
+	log := log.FromContext(ctx)
+	log.Info("starting to delete db instance: " + dbIdentifier)
+
 	_, err := r.rdsClient.DeleteDBInstance(ctx, &awsRds.DeleteDBInstanceInput{
 		DBInstanceIdentifier: aws.String(dbIdentifier),
 		SkipFinalSnapshot:    aws.Bool(true),
@@ -176,7 +219,26 @@ func (r *AwsRDSDemoInstanceReconciler) deleteRDSInstance(ctx context.Context, db
 		}
 		return err
 	}
+
+	log.Info("db instance delete successfully")
 	return nil
+}
+
+func (r *AwsRDSDemoInstanceReconciler) getRDSInstance(ctx context.Context, dbIdentifier string) (*types.DBInstance, error) {
+	dbs, err := r.rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: aws.String(dbIdentifier),
+	})
+	if err != nil {
+		var instanceNotFound *types.DBInstanceNotFoundFault
+		if errors.As(err, &instanceNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if len(dbs.DBInstances) == 0 {
+		return nil, nil
+	}
+	return &dbs.DBInstances[0], nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
