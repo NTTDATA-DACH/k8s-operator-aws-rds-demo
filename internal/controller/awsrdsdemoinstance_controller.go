@@ -139,25 +139,9 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	un, ps := "postgres", "postgres"
 
 	// Create db according to the specification
-	_, err = r.rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: &dbIdentifier,
-	})
-	if err != nil {
-		_, err = r.rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
-			DBInstanceIdentifier: aws.String(dbIdentifier),
-			DBInstanceClass:      aws.String(instance.Spec.DBInstanceClass),
-			Engine:               aws.String(instance.Spec.Engine),
-			EngineVersion:        aws.String(instance.Spec.EngineVersion),
-			AllocatedStorage:     aws.Int32(20),
-			DBName:               aws.String(instance.Spec.DBName),
-			MasterUsername:       aws.String(un),
-			MasterUserPassword:   aws.String(ps),
-		})
-		if err != nil {
-			log.Error(err, "failed to create db: "+err.Error())
-			return ctrl.Result{}, err
-		}
-		log.Info(fmt.Sprintf("database engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
+	if err = r.createRDSInstance(ctx, dbIdentifier, instance, un, ps); err != nil {
+		log.Error(err, "failed to create db instance: "+err.Error())
+		return ctrl.Result{}, err
 	}
 
 	// Update db instance if spec changed
@@ -168,6 +152,31 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	log.Info("reconcile finished...")
 	return ctrl.Result{}, nil
+}
+
+func (r *AwsRDSDemoInstanceReconciler) createRDSInstance(ctx context.Context, dbIdentifier string, instance *awsv1alpha1.AwsRDSDemoInstance, username string, password string) error {
+	log := log.FromContext(ctx)
+
+	_, err := r.rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: &dbIdentifier,
+	})
+	if err != nil {
+		log.Info("starting to create db instance: " + dbIdentifier)
+		_, err = r.rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
+			DBInstanceIdentifier: aws.String(dbIdentifier),
+			DBInstanceClass:      aws.String(instance.Spec.DBInstanceClass),
+			Engine:               aws.String(instance.Spec.Engine),
+			EngineVersion:        aws.String(instance.Spec.EngineVersion),
+			AllocatedStorage:     aws.Int32(20),
+			DBName:               aws.String(instance.Spec.DBName),
+			MasterUsername:       aws.String(username),
+			MasterUserPassword:   aws.String(password),
+		})
+		if err != nil {
+			return err
+		}
+		log.Info(fmt.Sprintf("db instance for engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
+	}
 }
 
 func (r *AwsRDSDemoInstanceReconciler) updateRDSInstance(ctx context.Context, dbIdentifier string, instance *awsv1alpha1.AwsRDSDemoInstance) error {
