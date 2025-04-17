@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: awsrdsdemoinstance-dev
 spec:
-  dbInstanceClass: "db.t3.small" # micro, small, medium, large
+  dbInstanceClass: "db.t3.micro" # micro, small, medium, large
   engine: "postgres"
   engineVersion: "17.2" # 17.4, 17.2
   dbName: "k8soperatorawsrdsdemo"

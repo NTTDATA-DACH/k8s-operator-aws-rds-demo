@@ -23,14 +23,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsCfg "github.com/aws/aws-sdk-go-v2/config"
 	awsRds "github.com/aws/aws-sdk-go-v2/service/rds"
-	"github.com/aws/aws-sdk-go-v2/service/rds/types"
+	awsRdsTypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	//	awsRdsTypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
-	//	corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	//	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -50,6 +49,7 @@ type AwsRDSDemoInstanceReconciler struct {
 // +kubebuilder:rbac:groups=aws.nttdata.com,resources=awsrdsdemoinstances,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=aws.nttdata.com,resources=awsrdsdemoinstances/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=aws.nttdata.com,resources=awsrdsdemoinstances/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -59,7 +59,7 @@ type AwsRDSDemoInstanceReconciler struct {
 func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	log.Info("reconcile triggered...")
+	log.Info(fmt.Sprintf("reconcile triggered for '%s' in namespace '%s'...", req.Name, req.Namespace))
 
 	// Fetch the AwsRDSDemoInstance instance
 	instance := &awsv1alpha1.AwsRDSDemoInstance{}
@@ -120,23 +120,20 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// Fetch credentials from existing secret
-	/*
-		secret := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.CredentialSecretName, Namespace: req.Namespace}, secret); err != nil {
-			log.Error(err, "unable to fetch credentials secret"+err.Error())
-			return ctrl.Result{}, err
-		}
-		unb, uexists := secret.Data["username"]
-		psb, pexists := secret.Data["password"]
-		if !uexists || !pexists {
-			err := fmt.Errorf("secret must contain 'username' and 'password'")
-			log.Error(err, "invalid secret")
-			return ctrl.Result{}, err
-		}
-		un := string(unb)
-		ps := string(psb)
-	*/
-	un, ps := "postgres", "postgres"
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.CredentialSecretName, Namespace: req.Namespace}, secret); err != nil {
+		log.Error(err, "unable to fetch credentials secret"+err.Error())
+		return ctrl.Result{}, err
+	}
+	unb, uexists := secret.Data["username"]
+	psb, pexists := secret.Data["password"]
+	if !uexists || !pexists {
+		err := fmt.Errorf("secret must contain 'username' and 'password'")
+		log.Error(err, "invalid secret: "+err.Error())
+		return ctrl.Result{}, err
+	}
+	un := string(unb)
+	ps := string(psb)
 
 	// Create db according to the specification
 	if err = r.createRDSInstance(ctx, dbIdentifier, instance, un, ps); err != nil {
@@ -224,7 +221,7 @@ func (r *AwsRDSDemoInstanceReconciler) deleteRDSInstance(ctx context.Context, db
 		SkipFinalSnapshot:    aws.Bool(true),
 	})
 	if err != nil {
-		var alreadyDeleted *types.DBInstanceNotFoundFault
+		var alreadyDeleted *awsRdsTypes.DBInstanceNotFoundFault
 		if errors.As(err, &alreadyDeleted) {
 			return nil
 		}
@@ -235,12 +232,12 @@ func (r *AwsRDSDemoInstanceReconciler) deleteRDSInstance(ctx context.Context, db
 	return nil
 }
 
-func (r *AwsRDSDemoInstanceReconciler) getRDSInstance(ctx context.Context, dbIdentifier string) (*types.DBInstance, error) {
+func (r *AwsRDSDemoInstanceReconciler) getRDSInstance(ctx context.Context, dbIdentifier string) (*awsRdsTypes.DBInstance, error) {
 	dbs, err := r.rdsClient.DescribeDBInstances(ctx, &awsRds.DescribeDBInstancesInput{
 		DBInstanceIdentifier: aws.String(dbIdentifier),
 	})
 	if err != nil {
-		var instanceNotFound *types.DBInstanceNotFoundFault
+		var instanceNotFound *awsRdsTypes.DBInstanceNotFoundFault
 		if errors.As(err, &instanceNotFound) {
 			return nil, nil
 		}
