@@ -25,3 +25,9 @@ resources:
 - awsrdsdemoinstance_editor_role.yaml
 - awsrdsdemoinstance_viewer_role.yaml
 
+patches:
+  - target:
+      kind: ServiceAccount
+      name: controller-manager
+      namespace: system
+    path: service_account_patch.yaml
