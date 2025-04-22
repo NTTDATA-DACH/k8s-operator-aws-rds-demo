@@ -40,6 +40,10 @@ spec:
           spec:
             description: AwsRDSDemoInstanceSpec defines the desired state of AwsRDSDemoInstance
             properties:
+              allocatedStorage:
+                format: int32
+                minimum: 20
+                type: integer
               credentialSecretName:
                 type: string
               dbInstanceClass:
@@ -53,6 +57,7 @@ spec:
               stage:
                 type: string
             required:
+            - allocatedStorage
             - credentialSecretName
             - dbInstanceClass
             - dbName

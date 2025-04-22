@@ -20,12 +20,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Define constants for RDS instance state values
+const (
+	StateCreating = "creating"
+	StateUpdating = "updating"
+	StateDeleting = "deleting"
+	StateCreated  = "created"
+	StateUpdated  = "updated"
+	StateDeleted  = "deleted"
+)
+
 // AwsRDSDemoInstanceSpec defines the desired state of AwsRDSDemoInstance
 type AwsRDSDemoInstanceSpec struct {
-	DBInstanceClass      string `json:"dbInstanceClass"`
-	Engine               string `json:"engine"`
-	EngineVersion        string `json:"engineVersion"`
-	DBName               string `json:"dbName"`
+	DBInstanceClass string `json:"dbInstanceClass"`
+	Engine          string `json:"engine"`
+	EngineVersion   string `json:"engineVersion"`
+	DBName          string `json:"dbName"`
+	// +kubebuilder:validation:Minimum=20
+	AllocatedStorage     int32  `json:"allocatedStorage"`
 	Stage                string `json:"stage"`
 	CredentialSecretName string `json:"credentialSecretName"`
 }

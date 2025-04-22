@@ -85,6 +85,8 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Add finalizer
 	if !controllerutil.ContainsFinalizer(instance, awsrdsdemoinstanceFinalizer) {
 		log.Info("adding finalizer for AwsRDSDemoInstance")
+		instance.Status.Status = awsv1alpha1.StateUpdating
+
 		if ok := controllerutil.AddFinalizer(instance, awsrdsdemoinstanceFinalizer); !ok {
 			err = fmt.Errorf("failed to add finalizer into AwsRDSDemoInstance")
 			log.Error(err, "failed to add finalizer into AwsRDSDemoInstance")
@@ -94,14 +96,17 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 			log.Error(err, "failed to update AwsRDSDemoInstance to add finalizer: "+err.Error())
 			return ctrl.Result{}, err
 		}
+
 		log.Info("added finalizer for AwsRDSDemoInstance")
+		instance.Status.Status = awsv1alpha1.StateUpdated
 	}
 
 	// Remove instance with finalizer
-	isInstanceToBeDeleted := instance.GetDeletionTimestamp() != nil
-	if isInstanceToBeDeleted {
+	if !instance.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(instance, awsrdsdemoinstanceFinalizer) {
 			log.Info("starting to delete database: " + dbIdentifier)
+			instance.Status.Status = awsv1alpha1.StateDeleting
+
 			if err := r.deleteRDSInstance(ctx, dbIdentifier); err != nil {
 				log.Error(err, "failed to remove database: "+err.Error())
 				return ctrl.Result{}, err
@@ -116,6 +121,9 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 				log.Error(err, "failed to update AwsRDSDemoInstance to remove finalizer: "+err.Error())
 				return ctrl.Result{}, err
 			}
+
+			log.Info("finalizer deleted")
+			instance.Status.Status = awsv1alpha1.StateDeleted
 		}
 	}
 
@@ -136,10 +144,12 @@ func (r *AwsRDSDemoInstanceReconciler) Reconcile(ctx context.Context, req ctrl.R
 	ps := string(psb)
 
 	// Create db according to the specification
+	instance.Status.Status = awsv1alpha1.StateCreating
 	if err = r.createRDSInstance(ctx, dbIdentifier, instance, un, ps); err != nil {
 		log.Error(err, "failed to create db instance: "+err.Error())
 		return ctrl.Result{}, err
 	}
+	instance.Status.Status = awsv1alpha1.StateCreated
 
 	// Update db instance if spec changed
 	if err = r.updateRDSInstance(ctx, dbIdentifier, instance); err != nil {
@@ -159,12 +169,14 @@ func (r *AwsRDSDemoInstanceReconciler) createRDSInstance(ctx context.Context, db
 	})
 	if err != nil {
 		log.Info("starting to create db instance: " + dbIdentifier)
+		instance.Status.Status = awsv1alpha1.StateCreating
+
 		_, err = r.rdsClient.CreateDBInstance(ctx, &awsRds.CreateDBInstanceInput{
 			DBInstanceIdentifier: aws.String(dbIdentifier),
 			DBInstanceClass:      aws.String(instance.Spec.DBInstanceClass),
 			Engine:               aws.String(instance.Spec.Engine),
 			EngineVersion:        aws.String(instance.Spec.EngineVersion),
-			AllocatedStorage:     aws.Int32(20),
+			AllocatedStorage:     aws.Int32(instance.Spec.AllocatedStorage),
 			DBName:               aws.String(instance.Spec.DBName),
 			MasterUsername:       aws.String(username),
 			MasterUserPassword:   aws.String(password),
@@ -172,6 +184,8 @@ func (r *AwsRDSDemoInstanceReconciler) createRDSInstance(ctx context.Context, db
 		if err != nil {
 			return err
 		}
+
+		instance.Status.Status = awsv1alpha1.StateCreated
 		log.Info(fmt.Sprintf("db instance for engine '%s:%s' with the name '%s' with identifier '%s' created successfully", instance.Spec.Engine, instance.Spec.EngineVersion, instance.Spec.DBName, dbIdentifier))
 	}
 
@@ -193,20 +207,31 @@ func (r *AwsRDSDemoInstanceReconciler) updateRDSInstance(ctx context.Context, db
 
 	isInstanceToBeUpdate := false
 	if aws.ToString(currentDb.DBInstanceClass) != instance.Spec.DBInstanceClass {
+		log.Info("detected modification of DBInstanceClass, will try to update db instance")
 		modifyInput.DBInstanceClass = aws.String(instance.Spec.DBInstanceClass)
 		isInstanceToBeUpdate = true
 	}
 	if aws.ToString(currentDb.EngineVersion) != instance.Spec.EngineVersion {
+		log.Info("detected modification of EngineVersion, will try to update db instance")
 		modifyInput.EngineVersion = aws.String(instance.Spec.EngineVersion)
+		isInstanceToBeUpdate = true
+	}
+	if *currentDb.AllocatedStorage != instance.Spec.AllocatedStorage {
+		log.Info("detected modification of AllocatedStorage, will try to update db instance")
+		modifyInput.AllocatedStorage = aws.Int32(instance.Spec.AllocatedStorage)
 		isInstanceToBeUpdate = true
 	}
 
 	if isInstanceToBeUpdate {
 		log.Info("starting to update db instance: " + dbIdentifier)
+		instance.Status.Status = awsv1alpha1.StateUpdating
+
 		if _, err = r.rdsClient.ModifyDBInstance(ctx, modifyInput); err != nil {
 			return err
 		}
+
 		log.Info("db instance updated successfully")
+		instance.Status.Status = awsv1alpha1.StateUpdated
 	}
 
 	return nil

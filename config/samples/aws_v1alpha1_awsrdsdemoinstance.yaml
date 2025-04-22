@@ -10,5 +10,6 @@ spec:
   engine: "postgres"
   engineVersion: "17.2" # 17.4, 17.2
   dbName: "k8soperatorawsrdsdemo"
+  allocatedStorage: 20
   stage: "dev"
   credentialSecretName: "postgresql-secret"
