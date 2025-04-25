@@ -1,15 +1,25 @@
-# Kubernetes Operator AWS RDS Demo (k8s-operator-aws-rds-demo)
+# NTT DATA's Kubernetes Operator AWS RDS Demo
 
-This project demonstrates the implementation of a Kubernetes operator that can create, update, and delete an AWS RDS instance based on a Custom Resource Definition (CRD).
+The project **k8s-operator-aws-rds-demo** demonstrates the implementation of a Kubernetes operator that can create, update, 
+and delete an AWS RDS instance based on a Custom Resource Definition (CRD).
 
-The implementation fulfills the customer's defined requirements, which are outlined as follows:
+## Disclaimer
+
+This project is a proof of concept (PoC) and is intended for demonstration purposes only.
+It includes example configurations, minimal documentation, and simplified logic. 
+The code is not production-ready, lacks comprehensive error handling, has no automated tests, 
+and assumes certain tool and library versions, infrastructure or security setups etc.
+
+## Goal
+
+The implementation fulfills the customer's defined requirements for a PoC, which are outlined as follows:
 
 > Task 3: As part of the platform we are providing a database as a service that teams can request. 
 Please create a custom k8s operator for offering AWS RDS instance to a given stage, where credentials are stored as k8s secrets.
 
-The project was scaffolded using [Operator SDK](https://operatorframework.io/) version v1.39.2 and [Go language](https://go.dev/) version 1.22.0.
-
 ## Operator's CRD
+
+The project was scaffolded using [Operator SDK](https://operatorframework.io/) version v1.39.2 and [Go language](https://go.dev/) version 1.22.0.
 
 ### Specification
 
@@ -27,6 +37,11 @@ type AwsRDSDemoInstanceSpec struct {
 	CredentialSecretName    string `json:"credentialSecretName"`
 }
 ```
+
+The above specification contains standard database properties.
+
+The `CredentialSecretName` contains database credentials used for initial setup of the database.
+It has to contain two data fields `username` and `password`.
 
 ### CRD Example
 
@@ -49,6 +64,8 @@ spec:
   stage: "dev"
   credentialSecretName: "postgresql-secret"
 ```
+
+**NOTE** The manual test were made for the `postgres` RDS only, however the operator was implemented to support other engines also.
 
 ### CDR Updates
 
