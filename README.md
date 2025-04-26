@@ -17,9 +17,23 @@ The implementation fulfills the customer's defined requirements for a PoC, which
 > Task 3: As part of the platform we are providing a database as a service that teams can request. 
 Please create a custom k8s operator for offering AWS RDS instance to a given stage, where credentials are stored as k8s secrets.
 
+## Assumptions
+
+The operator assumes that the following services and resources are properly configured before its deployment and operation:
+* EKS Kubernetes Cluster
+* IAM Policy and Role (look below for details)
+
 ## Operator's CRD
 
-The project was scaffolded using [Operator SDK](https://operatorframework.io/) version v1.39.2 and [Go language](https://go.dev/) version 1.22.0.
+The project was scaffolded using [Operator SDK](https://operatorframework.io/) version v1.39 and [Go language](https://go.dev/) version 1.22.
+
+The PcC implementation uses following special Go libraries:
+* **github.com/aws/aws-sdk-go-v2**: The official AWS SDK for Go (version 2), designed to enable Go developers to interact with AWS services using a unified and idiomatic API.
+* **github.com/aws/aws-sdk-go-v2/config**: A package within the AWS SDK for Go (v2) that provides configuration loading utilities for simplifying the initialization of AWS service clients.
+* **github.com/aws/aws-sdk-go-v2/service/rds**: The AWS SDK for Go (v2) RDS service client, enabling developers to interact with Amazon Relational Database Service (RDS) for managing database instances and performing various database operations.
+* **k8s.io/apimachinery**: A library containing common types and utilities for Kubernetes API machinery, essential for building Kubernetes clients and controllers.
+* **k8s.io/client-go**: A Go client library for interacting with the Kubernetes API, facilitating operations such as CRUD (Create, Read, Update, Delete) on Kubernetes resources.
+* **sigs.k8s.io/controller-runtime**: A set of libraries for building Kubernetes controllers and operators, providing utilities and abstractions to simplify and standardize controller development.
 
 ### Specification
 
